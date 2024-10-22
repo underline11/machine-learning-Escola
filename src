@@ -1,0 +1,254 @@
+import os
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from fpdf import FPDF
+
+class SistemaGerenciamentoHorarios:
+    def __init__(self):
+        self.professores = {}
+        self.turmas = {}
+        self.disciplinas = {
+            "Português": None,
+            "Matemática": None,
+            "Geografia": None,
+            "História": None,
+            "Química": None,
+            "Educação Física": None,
+            "Ciências": None,
+            "Artes": None
+        }
+        self.horarios = {}
+
+    def adicionar_professor(self):
+        while True:
+            nome = input("Digite o nome do professor: ")
+            aulas_semana = int(input(f"Quantas aulas por semana o professor {nome} terá? "))
+            self.professores[nome] = {'aulas_semana': aulas_semana}
+            print(f'Professor {nome} cadastrado com {aulas_semana} aulas por semana.')
+
+            continuar = input("Deseja adicionar mais professores? (sim/não): ").strip().lower()
+            if continuar == 'não':
+                break
+
+    def adicionar_turma(self):
+        while True:
+            turma = input("Digite a turma (ex: 1º Ano): ")
+            ano = input("Digite o ano: ")
+            self.turmas[turma] = ano
+            print(f'Turma {turma} do ano {ano} cadastrada.')
+
+            continuar = input("Deseja adicionar mais turmas? (sim/não): ").strip().lower()
+            if continuar == 'não':
+                break
+
+    def adicionar_disciplina(self):
+        while True:
+            print("Disciplinas disponíveis:")
+            for disciplina in self.disciplinas.keys():
+                print(f"- {disciplina}")
+            
+            disciplina = input("Digite o nome da disciplina (ou 'sair' para encerrar): ")
+            if disciplina.lower() == 'sair':
+                break
+
+            if disciplina in self.disciplinas:
+                professor = input("Digite o nome do professor responsável: ")
+                turma = input("Digite a turma associada: ")
+                self.disciplinas[disciplina] = {'professor': professor, 'turma': turma}
+                print(f'Disciplina {disciplina} cadastrada com professor {professor} na turma {turma}.')
+            else:
+                print("Disciplina inválida. Tente novamente.")
+
+            continuar = input("Deseja adicionar mais disciplinas? (sim/não): ").strip().lower()
+            if continuar == 'não':
+                break
+
+    def verificar_conflito(self, turma, dia, aula):
+        """Verifica se já existe uma disciplina no horário especificado."""
+        disciplina_atual = self.horarios[turma][f'Dia {dia}'][f'Aula {aula}']
+        if disciplina_atual:
+            return True, disciplina_atual
+        return False, None
+
+    def organizar_horarios(self):
+        # Limpar horários anteriores
+        self.horarios = {turma: {f'Dia {i + 1}': {f'Aula {j + 1}': None for j in range(6)} for i in range(5)} for turma in self.turmas}
+
+        for turma in self.turmas:
+            print(f"\nOrganizando horários para a turma: {turma}")
+            for dia in range(1, 6):  # 5 dias
+                print(f"\nDia {dia}:")
+                for aula in range(1, 7):  # 6 aulas
+                    print(f"Selecione a disciplina para Aula {aula}:")
+
+                    # Disciplinas disponíveis (fixas)
+                    disciplinas_disponiveis = list(self.disciplinas.keys())
+                    
+                    for idx, disciplina in enumerate(disciplinas_disponiveis):
+                        print(f"{idx + 1}. {disciplina}")
+
+                    while True:
+                        escolha = input(f"Escolha uma disciplina (1-{len(disciplinas_disponiveis)}) ou 'p' para pular: ").strip().lower()
+                        if escolha == 'p':
+                            break
+                        if escolha.isdigit() and 1 <= int(escolha) <= len(disciplinas_disponiveis):
+                            disciplina_escolhida = disciplinas_disponiveis[int(escolha) - 1]
+
+                            # Verificar se já há uma disciplina atribuída no horário
+                            conflito, disciplina_atual = self.verificar_conflito(turma, dia, aula)
+                            if conflito:
+                                print(f"Conflito detectado! Aula {aula} do Dia {dia} já está ocupada por {disciplina_atual}.")
+                                continuar = input("Deseja sobrescrever essa disciplina? (sim/não): ").strip().lower()
+                                if continuar == 'sim':
+                                    self.horarios[turma][f'Dia {dia}'][f'Aula {aula}'] = disciplina_escolhida
+                                    print(f'Disciplina {disciplina_escolhida} atribuída à Aula {aula} do Dia {dia}.')
+                                    break
+                                else:
+                                    print(f"Disciplina {disciplina_atual} mantida.")
+                                    break
+                            else:
+                                self.horarios[turma][f'Dia {dia}'][f'Aula {aula}'] = disciplina_escolhida
+                                print(f'Aula {aula} do Dia {dia} atribuída à disciplina {disciplina_escolhida}.')
+                                break
+                        else:
+                            print("Opção inválida. Tente novamente.")
+        
+        # Após organizar os horários, dar as opções:
+        while True:
+            print("\nOpções após organizar os horários:")
+            print("1. Visualizar Horários (gráfico interativo)")
+            print("2. Alterar Horários")
+            print("0. Voltar ao Menu Principal")
+            
+            opcao = input("Escolha uma opção: ").strip()
+            if opcao == '1':
+                self.visualizar_horarios()
+                break
+            elif opcao == '2':
+                self.alterar_horarios()
+                break
+            elif opcao == '0':
+                break
+            else:
+                print("Opção inválida. Tente novamente.")
+
+    def alterar_horarios(self):
+        while True:
+            for turma in self.horarios:
+                print(f"\nAlterando horários para a turma: {turma}")
+                for dia in range(1, 6):  # 5 dias
+                    print(f"\nDia {dia}:")
+                    for aula in range(1, 7):  # 6 aulas
+                        print(f"Aula {aula} (Disciplina atual: {self.horarios[turma][f'Dia {dia}'][f'Aula {aula}']}):")
+                        
+                        # Disciplinas disponíveis (fixas)
+                        disciplinas_disponiveis = list(self.disciplinas.keys())
+                        
+                        for idx, disciplina in enumerate(disciplinas_disponiveis):
+                            print(f"{idx + 1}. {disciplina}")
+
+                        while True:
+                            escolha = input(f"Escolha uma disciplina (1-{len(disciplinas_disponiveis)}) ou 'p' para pular: ").strip().lower()
+                            if escolha == 'p':
+                                break
+                            if escolha.isdigit() and 1 <= int(escolha) <= len(disciplinas_disponiveis):
+                                disciplina_escolhida = disciplinas_disponiveis[int(escolha) - 1]
+
+                                # Verificar se já há uma disciplina atribuída no horário
+                                conflito, disciplina_atual = self.verificar_conflito(turma, dia, aula)
+                                if conflito:
+                                    print(f"Conflito detectado! Aula {aula} do Dia {dia} já está ocupada por {disciplina_atual}.")
+                                    continuar = input("Deseja sobrescrever essa disciplina? (sim/não): ").strip().lower()
+                                    if continuar == 'sim':
+                                        self.horarios[turma][f'Dia {dia}'][f'Aula {aula}'] = disciplina_escolhida
+                                        print(f'Disciplina da Aula {aula} no Dia {dia} alterada para {disciplina_escolhida}.')
+                                        break
+                                    else:
+                                        print(f"Disciplina {disciplina_atual} mantida.")
+                                        break
+                                else:
+                                    self.horarios[turma][f'Dia {dia}'][f'Aula {aula}'] = disciplina_escolhida
+                                    print(f'Aula {aula} do Dia {dia} atribuída à disciplina {disciplina_escolhida}.')
+                                    break
+                            else:
+                                print("Opção inválida. Tente novamente.")
+
+            # Opção para voltar ao menu
+            voltar = input("\nDeseja voltar ao menu? (sim/não): ").strip().lower()
+            if voltar == 'sim':
+                break
+
+        print("\nHorários alterados com sucesso.")
+        self.visualizar_horarios()
+
+    def visualizar_horarios(self):
+        if not self.horarios:
+            print("Nenhum horário organizado. Por favor, organize os horários primeiro.")
+            return
+
+        tabela_horarios = []
+        for turma, dias in self.horarios.items():
+            for dia, aulas in dias.items():
+                for horario, disciplina in aulas.items():
+                    tabela_horarios.append([turma, dia, horario, disciplina])
+
+        df = pd.DataFrame(tabela_horarios, columns=["Turma", "Dia", "Horário", "Disciplina"])
+        print("\nTabela de horários:")
+        print(df)
+
+        # Gerar gráfico interativo
+        fig = make_subplots(rows=1, cols=1)
+        fig.add_trace(go.Table(header=dict(values=df.columns.tolist()),
+                               cells=dict(values=[df[col] for col in df.columns])))
+        fig.show()
+
+    def salvar_pdf(self):
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        pdf.cell(200, 10, txt="Horários Escolares", ln=True, align='C')
+
+        for turma, dias in self.horarios.items():
+            pdf.cell(200, 10, txt=f"Turma: {turma}", ln=True, align='L')
+            for dia, aulas in dias.items():
+                pdf.cell(200, 10, txt=f"  {dia}:", ln=True, align='L')
+                for horario, disciplina in aulas.items():
+                    pdf.cell(200, 10, txt=f"    {horario}: {disciplina}", ln=True, align='L')
+
+        pdf.output("horarios.pdf")
+        print("Horários exportados para PDF com sucesso!")
+
+    def menu(self):
+        while True:
+            print("\n=== Sistema de Gerenciamento de Horários ===")
+            print("1. Adicionar Professor")
+            print("2. Adicionar Turma")
+            print("3. Adicionar Disciplina")
+            print("4. Organizar Horários")
+            print("5. Visualizar Horários")
+            print("6. Exportar Horários (PDF)")
+            print("0. Sair")
+
+            opcao = input("Escolha uma opção: ").strip()
+            if opcao == '1':
+                self.adicionar_professor()
+            elif opcao == '2':
+                self.adicionar_turma()
+            elif opcao == '3':
+                self.adicionar_disciplina()
+            elif opcao == '4':
+                self.organizar_horarios()
+            elif opcao == '5':
+                self.visualizar_horarios()
+            elif opcao == '6':
+                self.salvar_pdf()
+            elif opcao == '0':
+                print("Encerrando o sistema...")
+                break
+            else:
+                print("Opção inválida. Tente novamente.")
+
+# Inicializar o sistema
+sistema = SistemaGerenciamentoHorarios()
+sistema.menu()
